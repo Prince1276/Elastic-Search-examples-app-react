@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+
+const http = require('http');
+const config = require("../config");
+const DBManager = require("../lib/DBManager");
+const { esService } = require("../services/");
+const { normalizePort, errorStackParser } = require("../helpers");
+const logger = require("../lib/logger");
+const app = require('../app');
+
+const PORT = normalizePort(config.port);
+app.set('port', PORT);
+const server = http.createServer(app);
+
+const conn = DBManager.getInstance();
+
+conn.once("open", async (err) => {
+  if (err) console.log("Database connection failure");
+  else {
+    console.log("Database connection is opened");
+    await esService.connect();
+    server.listen(PORT);
+  }
+});
+
+server.on('error', onError);
+server.on('listening', onListening);
+server.on('uncaughtException', onUncaughtException);
+
+// Event listener for HTTP server "error" event.
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof PORT === 'string'
+    ? 'Pipe ' + PORT
+    : 'Port ' + PORT;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+// Event listener for HTTP server "listening" event.
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  console.log(`Listening on ${bind}`);
+}
+
+// Event listener for "uncaught exception" event.
+function onUncaughtException(err) {
+  const parsedStack = errorStackParser(err);
+  logger(parsedStack[1].fileName).errorLogger.error(`UNCAUGHT EXCEPTION: ${err.message || "Unkown"}`);
+  process.exit(1);
+};
